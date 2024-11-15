@@ -1,0 +1,10 @@
+data:
+  output: "./Data"
+  interval: 50
+  preview: True
+camera:
+  fps: 30
+  stereoRes: 720
+  previewRes: "1280x720"
+  floodLightIntensity: 1
+  laserDotProjectorIntensity: 1
