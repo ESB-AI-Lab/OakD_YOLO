@@ -59,7 +59,7 @@ Initialize `DataCollector` object and call `start` function to collect data. Mak
 from oak_yolo.DataCollector import DataCollector
 
 colector = DataCollect(path_to_settings.yaml)
-collector.star()
+collector.start()
 ```
 ***
 ### Data Loader
