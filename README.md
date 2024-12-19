@@ -29,12 +29,14 @@ camera:
   laserDotProjectorIntensity: # laser dot projector intensity (0 to 1)
 ```
 #### Usage
-Initialize `DistanceFinder` object and call `start` function to perform detections and depth calculations
+Initialize `DistanceFinder` object and call `start` function to initialize device connection and use `get_frame` function to perform detections and depth calculations on each frame
 ```
 from oak_yolo.DistanceFinder import DistanceFinder
 
 finder = DistanceFinder("settings.yaml")
 finder.start()
+while(True):
+  data = finder.get_frame()
 ```
 ***
 ### Data Collector
