@@ -6,6 +6,7 @@ import time
 from datetime import timedelta
 import torch
 import yaml
+from oak_yolo.calc import HostSpatialsCalc 
 
 class DistanceFinder:
 	"""
@@ -28,6 +29,8 @@ class DistanceFinder:
 		self.preview:bool = True
 		self.camera_settings:dict = {"fps":60,"stereoRes":400,"previewRes":(1280,720),
 										"floodLightIntensity":1,"laserDotProjectorIntensity":1}
+		# Camera
+		self.camera = None
 		# Pipelines For Camera
 		self.pipeline = dai.Pipeline()
 		self.rgb = self.pipeline.create(dai.node.Camera)
@@ -39,9 +42,8 @@ class DistanceFinder:
 		self.stereo = self.pipeline.create(dai.node.StereoDepth)
 		self.sync = self.pipeline.create(dai.node.Sync)
 		self.sync.setSyncThreshold(timedelta(milliseconds=50))
-		self.spatialLocationCalculator = self.pipeline.create(dai.node.SpatialLocationCalculator)
-		self.spatialData = self.pipeline.create(dai.node.XLinkOut)
-		self.spatialCalcConfig = self.pipeline.create(dai.node.XLinkIn)
+		# Spatial Calculator
+		self.spatialCalculator = None
 		# Stereo Depth Config
 		self.stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_DENSITY)
 		self.stereo.setLeftRightCheck(True)
@@ -50,28 +52,12 @@ class DistanceFinder:
 		# Output Pipelines
 		self.sync_out = self.pipeline.create(dai.node.XLinkOut)
 		self.sync_out.setStreamName("sync")
-		self.spatialData.setStreamName("spatialData")
-		self.spatialCalcConfig.setStreamName("spatialCalcConfig")
-		# Spatial Location Calculator Config
-		self.spatialLocationCalculator.inputConfig.setWaitForMessage(False)
-		topLeft = dai.Point2f(0.4, 0.4)
-		bottomRight = dai.Point2f(0.6, 0.6)
-		config = dai.SpatialLocationCalculatorConfigData()
-		config.depthThresholds.lowerThreshold = 100
-		config.depthThresholds.upperThreshold = 10000
-		config.calculationAlgorithm = dai.SpatialLocationCalculatorAlgorithm.MEDIAN
-		config.roi = dai.Rect(topLeft, bottomRight)
-		self.spatialLocationCalculator.initialConfig.addROI(config)
 		# Linking
 		self.rgb.preview.link(self.sync.inputs["rgbSync"])
 		self.stereo.depth.link(self.sync.inputs["depthSync"])
 		self.left.out.link(self.stereo.left)
 		self.right.out.link(self.stereo.right)
 		self.sync.out.link(self.sync_out.input)
-		self.stereo.depth.link(self.spatialLocationCalculator.inputDepth)
-		self.spatialLocationCalculator.passthroughDepth.link(self.sync.inputs["depthSync"])
-		self.spatialLocationCalculator.out.link(self.spatialData.input)
-		self.spatialCalcConfig.out.link(self.spatialLocationCalculator.inputConfig)
 		# Call Setup Function
 		self.__setup()
 		self.__camera_setup()
@@ -136,91 +122,60 @@ class DistanceFinder:
 			if key=="previewRes":
 				self.rgb.setPreviewSize(self.camera_settings["previewRes"][0],self.camera_settings["previewRes"][1])
 
-	def __roi_config(self,frame,x1,y1,x2,y2):
-		"""
-		Function to generate data for Spatial Location Calculator
-		"""
-		# Define the ROI for spatial calculation
-		topLeft = dai.Point2f(x1 / frame.shape[1], y1 / frame.shape[0])
-		bottomRight = dai.Point2f(x2 / frame.shape[1], y2 / frame.shape[0])
-        # Define Config Data
-		config = dai.SpatialLocationCalculatorConfigData()
-		config.depthThresholds.lowerThreshold = 100
-		config.depthThresholds.upperThreshold = 10000
-		config.calculationAlgorithm = dai.SpatialLocationCalculatorAlgorithm.MEDIAN
-		config.roi = dai.Rect(topLeft, bottomRight)
-		return config 
-
 	def start(self):
 		"""
 		Function to start distance finder
 		"""
 		# Connect To Device And Start Pipeline
-		with dai.Device(self.pipeline,maxUsbSpeed=dai.UsbSpeed.SUPER) as device:
-			# Add Device Settings
-			device.setIrFloodLightIntensity(self.camera_settings["floodLightIntensity"])
-			device.setIrLaserDotProjectorIntensity(self.camera_settings["laserDotProjectorIntensity"])
-			synced = device.getOutputQueue(name="sync",maxSize=1,blocking=False)
-			spatialCalcQueue = device.getOutputQueue(name="spatialData", maxSize=1, blocking=False)
-			spatialCalcConfigInQueue = device.getInputQueue("spatialCalcConfig")
-			while True:
-				# Get Frames From The Camera
-				syncData = synced.get()
-				inDepth = None
-				inRGB = None
-				for name,msg in syncData:
-					if name == "depthSync":
-						inDepth = msg
-					if name == "rgbSync":
-						inRGB = msg
-				depthFrame = inDepth.getFrame()
-				rgbFrame = inRGB.getCvFrame()
-				depthFrameColorized = cv2.applyColorMap(cv2.convertScaleAbs(depthFrame, alpha=0.03), cv2.COLORMAP_JET)
-		    	# Get Model Predictions
-				predictions = self.model(rgbFrame, device=torch.device(self.device))
-				if len(predictions[0].boxes)==0:
-					# Display Preview
-					if self.preview:
-						combined = np.concatenate([depthFrameColorized,rgbFrame],axis=0)
-						cv2.imshow("Combined",combined)
-						if cv2.waitKey(1) == ord('q'):
-		        					break
-					continue
-				# Iterate Through YOLO Detections And Get Updated ROIs
-				for detection in predictions:
-					roi_list=[]
-					for box in detection.boxes:
-						x1, y1, x2, y2= box.xyxy[0]
-						x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
-						cls = box.cls.item()
-						cls = self.model.names[cls]
-						roi_list.append(self.__roi_config(depthFrame,x1,y1,x2,y2))
-						cv2.putText(rgbFrame,cls,(x1+10,y1+20),cv2.FONT_HERSHEY_TRIPLEX, 0.5 , (0,0,255))
-				# Add ROIs To Config Queue And Get Spatial Data
-				cfg = dai.SpatialLocationCalculatorConfig()
-				cfg.setROIs(roi_list)
-				spatialCalcConfigInQueue.send(cfg)	
-				spacialData = spatialCalcQueue.get().getSpatialLocations()
-				# Iterate Through Spatial Data
-				for object in spacialData:
-					roi = object.config.roi
-					roi = roi.denormalize(width=1280, height=720)
-					xmin = int(roi.topLeft().x)
-					ymin = int(roi.topLeft().y)
-					xmax = int(roi.bottomRight().x)
-					ymax = int(roi.bottomRight().y)
-					color=(0,0,255)
-					fontType = cv2.FONT_HERSHEY_TRIPLEX
-					cv2.rectangle(rgbFrame, (xmin, ymin), (xmax, ymax), color, 1)
-					cv2.putText(rgbFrame, f"X: {int(object.spatialCoordinates.x)} mm", (xmin + 10, ymin + 35), fontType, 0.5, color)
-					cv2.putText(rgbFrame, f"Y: {int(object.spatialCoordinates.y)} mm", (xmin + 10, ymin + 50), fontType, 0.5, color)
-					cv2.putText(rgbFrame, f"Z: {int(object.spatialCoordinates.z)} mm", (xmin + 10, ymin + 65), fontType, 0.5, color)
-				# Display Preview
-				if self.preview:
-					combined = np.concatenate([depthFrameColorized,rgbFrame],axis=0)
-					cv2.imshow("Combined",combined)
-					if cv2.waitKey(1) == ord('q'):
-						break 
-		cv2.destroyAllWindows()
+		self.camera = dai.Device(self.pipeline,maxUsbSpeed=dai.UsbSpeed.SUPER)
+		# Add Device Settings
+		self.camera.setIrFloodLightIntensity(self.camera_settings["floodLightIntensity"])
+		self.camera.setIrLaserDotProjectorIntensity(self.camera_settings["laserDotProjectorIntensity"])
+		self.synced = self.camera.getOutputQueue(name="sync",maxSize=1,blocking=False)
+		self.spatialCalculator = HostSpatialsCalc(self.camera)
+		
+	def get_frame(self):
+		# Get Frames From The Camera
+		syncData = self.synced.get()
+		inDepth = None
+		inRGB = None
+		for name,msg in syncData:
+			if name == "depthSync":
+				inDepth = msg
+			if name == "rgbSync":
+				inRGB = msg
+		depthFrame = inDepth.getFrame()
+		rgbFrame = inRGB.getCvFrame()
+		depthFrameColorized = cv2.applyColorMap(cv2.convertScaleAbs(depthFrame, alpha=0.03), cv2.COLORMAP_JET)
+		# Get Model Predictions
+		predictions = self.model(rgbFrame, device=torch.device(self.device))
+		if len(predictions[0].boxes)==0:
+			# Display Preview
+			if self.preview:
+				combined = np.concatenate([depthFrameColorized,rgbFrame],axis=0)
+				cv2.imshow("Combined",combined)
+				cv2.waitKey(1)
+		# Iterate Through YOLO Detections And Get Object Depths
+		for detection in predictions:
+			roi_list=[]
+			for box in detection.boxes:
+				x1, y1, x2, y2 = box.xyxy[0]
+				x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
+				cls = box.cls.item()
+				cls = self.model.names[cls]
+				spatials, center = self.spatialCalculator.calc_spatials(inDepth,[x1,y1,x2,y2],averaging_method=np.median)
+				color=(0,0,255)
+				fontType = cv2.FONT_HERSHEY_TRIPLEX
+				cv2.putText(rgbFrame,cls,(x1+10,y1+20),cv2.FONT_HERSHEY_TRIPLEX, 0.5 , color)
+				cv2.rectangle(rgbFrame, (x1, y1), (x2, y2),color, 1)
+				cv2.putText(rgbFrame, f"X: {int(spatials['x'])} mm", (x1 + 10, y1 + 35), fontType, 0.5, color)
+				cv2.putText(rgbFrame, f"Y: {int(spatials['y'])} mm", (x1 + 10, y1 + 50), fontType, 0.5, color)
+				cv2.putText(rgbFrame, f"Z: {int(spatials['z'])} mm", (x1 + 10, y1 + 65), fontType, 0.5, color)
+		# Display Preview
+		if self.preview:
+			combined = np.concatenate([depthFrameColorized,rgbFrame],axis=0)
+			cv2.imshow("Combined",combined)
+			cv2.waitKey(1)
+		#cv2.destroyAllWindows()
 
 

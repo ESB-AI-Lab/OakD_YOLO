@@ -1,3 +1,7 @@
+"""
+This code is from depthai-experiments
+Link: https://github.com/luxonis/depthai-experiments/blob/master/gen2-calc-spatials-on-host/calc.py
+"""
 import math
 import numpy as np
 import depthai as dai
