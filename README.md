@@ -3,7 +3,7 @@ Run YOLO object detection models on Jetson Nano and use [depthai library](https:
 ## Installation and Setup
 Clone repo
 ```
-git clone https://github.com/Kevin12J/OakD_YOLO.git
+git clone https://github.com/ESB-AI-Lab/OakD_YOLO.git
 ```
 Run setup script to link module to samples
 ```
