@@ -1,5 +1,5 @@
 # Object Distance Finder with OakD and YOLO
-Run YOLO object detection models on Jetson Nano and use [depthai library](https://github.com/luxonis/depthai/tree/main) to obtain depth data. Run script and [Docker image](https://github.com/users/Kevin12J/packages/container/package/oakd_yolo) built from [dusty-nv/jetson-container](https://github.com/dusty-nv/jetson-containers)<sup>1</sup> repo. All code tested on a Jetson Orin Nano with Luxonis Oak-D Pro W.
+Run YOLO object detection models on Jetson Nano and use [depthai library](https://github.com/luxonis/depthai/tree/main) and [depthai-experiments ](https://github.com/luxonis/depthai-experiments/tree/master) to obtain depth data. Run script and [Docker image](https://github.com/users/Kevin12J/packages/container/package/oakd_yolo) built from [dusty-nv/jetson-container](https://github.com/dusty-nv/jetson-containers)<sup>1</sup> repo. All code tested on a Jetson Orin Nano with Luxonis Oak-D Pro W.
 ## Installation and Setup
 Clone repo
 ```
