@@ -73,7 +73,7 @@ class DistanceFinder:
 				data_params = data['data']
 				for item in data_params:
 					if item=="model":
-						self.model = YOLO(data_params["model"])
+						self.model = YOLO(data_params["model"],task="detect")
 					if item=="device":
 						self.device=data_params["device"]
 					if item=="preview":
@@ -93,7 +93,7 @@ class DistanceFinder:
 					if item=="laserDotProjectorIntensity":
 						self.camera_settings["laserDotProjectorintensity"]=int(camera_params["laserDotProjectorIntensity"])
 			if not self.model:
-				self.model = YOLO("yolo11n.pt")
+				self.model = YOLO("yolo11n.pt",task="detect")
 			
 	def __camera_setup(self):
 		"""
@@ -135,6 +135,8 @@ class DistanceFinder:
 		self.spatialCalculator = HostSpatialsCalc(self.camera)
 		
 	def get_frame(self):
+		# Array To Store Object Data
+		data = []
 		# Get Frames From The Camera
 		syncData = self.synced.get()
 		inDepth = None
@@ -148,25 +150,27 @@ class DistanceFinder:
 		rgbFrame = inRGB.getCvFrame()
 		depthFrameColorized = cv2.applyColorMap(cv2.convertScaleAbs(depthFrame, alpha=0.03), cv2.COLORMAP_JET)
 		# Get Model Predictions
-		predictions = self.model(rgbFrame, device=torch.device(self.device))
+		predictions = self.model(rgbFrame, device=torch.device(self.device), verbose=False)
 		if len(predictions[0].boxes)==0:
 			# Display Preview
 			if self.preview:
 				combined = np.concatenate([depthFrameColorized,rgbFrame],axis=0)
 				cv2.imshow("Combined",combined)
 				cv2.waitKey(1)
+			return data
 		# Iterate Through YOLO Detections And Get Object Depths
 		for detection in predictions:
 			roi_list=[]
 			for box in detection.boxes:
 				x1, y1, x2, y2 = box.xyxy[0]
 				x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
-				cls = box.cls.item()
-				cls = self.model.names[cls]
+				object_class = box.cls.item()
+				object_class = self.model.names[object_class]
 				spatials, center = self.spatialCalculator.calc_spatials(inDepth,[x1,y1,x2,y2],averaging_method=np.median)
+				data.append({"box":(x1,x1,y1,y2),"class":object_class,"depth":int(spatials['z'])})
 				color=(0,0,255)
 				fontType = cv2.FONT_HERSHEY_TRIPLEX
-				cv2.putText(rgbFrame,cls,(x1+10,y1+20),cv2.FONT_HERSHEY_TRIPLEX, 0.5 , color)
+				cv2.putText(rgbFrame,object_class,(x1+10,y1+20),cv2.FONT_HERSHEY_TRIPLEX, 0.5 , color)
 				cv2.rectangle(rgbFrame, (x1, y1), (x2, y2),color, 1)
 				cv2.putText(rgbFrame, f"X: {int(spatials['x'])} mm", (x1 + 10, y1 + 35), fontType, 0.5, color)
 				cv2.putText(rgbFrame, f"Y: {int(spatials['y'])} mm", (x1 + 10, y1 + 50), fontType, 0.5, color)
@@ -176,6 +180,7 @@ class DistanceFinder:
 			combined = np.concatenate([depthFrameColorized,rgbFrame],axis=0)
 			cv2.imshow("Combined",combined)
 			cv2.waitKey(1)
+		return data
 		#cv2.destroyAllWindows()
 
 
