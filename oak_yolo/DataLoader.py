@@ -2,6 +2,7 @@ import numpy as np
 import os
 import cv2
 import yaml
+from oak_yolo.calc import HostSpatialsCalc 
 
 class DataLoader:
 	"""
@@ -31,6 +32,13 @@ class DataLoader:
 			"""
 			return cv2.imread(self.image)
 			
+		def getSpatials(self):
+			"""
+			Get coordinates of objects
+			"""
+			# Continue here
+			return None 
+			
 		def visualize(self):
 			"""
 			Visualize data
@@ -58,6 +66,8 @@ class DataLoader:
 		# settings
 		self.settings_path = settings
 		self.data_path = None
+		self.model = None
+		self.distanceCalculations = False
 		self.__setup()
 		
 	def __setup(self):
@@ -66,13 +76,13 @@ class DataLoader:
 		"""
 		with open(self.settings_path, 'r') as file:
 			data = yaml.safe_load(file)
-			if 'data' in data:
-				data_params = data['data']
-				for item in data_params:
-					if item=="directory":
-						self.data_path=data_params["directory"]
-						if(not os.path.exists(self.data_path)):
-							raise FileNotFoundError("Data Directory Doesn't Exist")
+			if 'directory' in data:
+				self.data_path=data["directory"]
+				if(not os.path.exists(self.data_path)):
+					raise FileNotFoundError("Data Directory Doesn't Exist")
+			if "model" in data:
+				self.model=data["model"]
+				
 	def load(self):
 		"""
 		Function To Load Data
