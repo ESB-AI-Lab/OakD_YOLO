@@ -2,6 +2,8 @@ data:
   model: "../../yolo11n.engine"
   device: "cuda"
   preview: True
+  outputPath: "./Data"
+  outputInterval: 50
 camera:
   fps: 30
   stereoRes: 720

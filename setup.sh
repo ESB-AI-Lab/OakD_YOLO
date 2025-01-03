@@ -5,10 +5,6 @@ cd Samples/DataCollector
 ln -s ../../oak_yolo oak_yolo
 cd ..
 cd ..
-cd Samples/DataLoader
-ln -s ../../oak_yolo oak_yolo
-cd ..
-cd ..
 cd Samples/DistanceFinder
 ln -s ../../oak_yolo oak_yolo
 

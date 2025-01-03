@@ -6,6 +6,8 @@ import time
 from datetime import timedelta
 import torch
 import yaml
+import json
+import os
 from oak_yolo.calc import HostSpatialsCalc 
 
 class DistanceFinder:
@@ -27,6 +29,9 @@ class DistanceFinder:
 		self.model = None
 		self.device = "cpu"
 		self.preview:bool = True
+		self.outputPath = None
+		self.outputInterval = 1
+		self.frameCount = 0
 		self.camera_settings:dict = {"fps":60,"stereoRes":400,"previewRes":(1280,720),
 										"floodLightIntensity":1,"laserDotProjectorIntensity":1}
 		# Camera
@@ -78,6 +83,10 @@ class DistanceFinder:
 						self.device=data_params["device"]
 					if item=="preview":
 						self.preview=bool(data_params["preview"])
+					if item=="outputPath":
+						self.outputPath=data_params["outputPath"]
+					if item=="outputInterval":
+						self.outputInterval=int(data_params["outputInterval"])
 			if 'camera' in data:
 				camera_params = data['camera']
 				for item in camera_params:
@@ -133,6 +142,15 @@ class DistanceFinder:
 		self.camera.setIrLaserDotProjectorIntensity(self.camera_settings["laserDotProjectorIntensity"])
 		self.synced = self.camera.getOutputQueue(name="sync",maxSize=1,blocking=False)
 		self.spatialCalculator = HostSpatialsCalc(self.camera)
+		# Create Directories For Output
+		if not os.path.exists(self.outputPath):
+			os.mkdir(self.outputPath)
+		if not os.path.exists(self.outputPath+"/depth"):
+			os.mkdir(self.outputPath+"/depth")
+		if not os.path.exists(self.outputPath+"/images"):
+			os.mkdir(self.outputPath+"/images")
+		if not os.path.exists(self.outputPath+"/spatials"):
+			os.mkdir(self.outputPath+"/spatials")
 		
 	def get_frame(self):
 		# Array To Store Object Data
@@ -149,6 +167,10 @@ class DistanceFinder:
 		depthFrame = inDepth.getFrame()
 		rgbFrame = inRGB.getCvFrame()
 		depthFrameColorized = cv2.applyColorMap(cv2.convertScaleAbs(depthFrame, alpha=0.03), cv2.COLORMAP_JET)
+		# Save RGB/Depth
+		if(self.outputPath and self.frameCount%self.outputInterval==0):
+			cv2.imwrite(f'{self.outputPath}/images/RGB_{self.frameCount//self.outputInterval}.jpg',rgbFrame)
+			np.save(f'{self.outputPath}/depth/DEPTH_{self.frameCount//self.outputInterval}',depthFrame)
 		# Get Model Predictions
 		predictions = self.model(rgbFrame, device=torch.device(self.device), verbose=False)
 		if len(predictions[0].boxes)==0:
@@ -157,10 +179,14 @@ class DistanceFinder:
 				combined = np.concatenate([depthFrameColorized,rgbFrame],axis=0)
 				cv2.imshow("Combined",combined)
 				cv2.waitKey(1)
+			# Save Spatials
+			if(self.outputPath and self.frameCount%self.outputInterval==0):
+				with open(f'{self.outputPath}/spatials/SPATIAL_{self.frameCount//self.outputInterval}.json','w') as spatial_out:
+					json.dump(data,spatial_out)
+			self.frameCount+=1
 			return data
 		# Iterate Through YOLO Detections And Get Object Depths
 		for detection in predictions:
-			roi_list=[]
 			for box in detection.boxes:
 				x1, y1, x2, y2 = box.xyxy[0]
 				x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
@@ -180,6 +206,11 @@ class DistanceFinder:
 			combined = np.concatenate([depthFrameColorized,rgbFrame],axis=0)
 			cv2.imshow("Combined",combined)
 			cv2.waitKey(1)
+		# Save Spatials
+		if(self.outputPath and self.frameCount%self.outputInterval==0):
+			with open(f'{self.outputPath}/spatials/SPATIAL_{self.frameCount//self.outputInterval}.json','w') as spatial_out:
+				json.dump(data,spatial_out)
+		self.frameCount+=1
 		return data
 		#cv2.destroyAllWindows()
 

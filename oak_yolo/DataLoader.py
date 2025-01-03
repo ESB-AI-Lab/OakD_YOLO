@@ -15,9 +15,10 @@ class DataLoader:
 		"""
 		Inner class to represent each depth frame/image pair
 		"""
-		def __init__(self,depth,image,index):
+		def __init__(self,depth,image,spatials,index):
 			self.depth = depth
 			self.image = image
+			self.spatials = spatials
 			self.index = index
 			
 		def getDepth(self):
@@ -36,8 +37,7 @@ class DataLoader:
 			"""
 			Get coordinates of objects
 			"""
-			# Continue here
-			return None 
+			return None
 			
 		def visualize(self):
 			"""
@@ -66,8 +66,9 @@ class DataLoader:
 		# settings
 		self.settings_path = settings
 		self.data_path = None
-		self.model = None
-		self.distanceCalculations = False
+		self.model = "yolo11n.pt"
+		self.device = "cpu"
+		#self.spatialCalculator = HostSpatialsCalc(self.camera)
 		self.__setup()
 		
 	def __setup(self):
@@ -79,9 +80,7 @@ class DataLoader:
 			if 'directory' in data:
 				self.data_path=data["directory"]
 				if(not os.path.exists(self.data_path)):
-					raise FileNotFoundError("Data Directory Doesn't Exist")
-			if "model" in data:
-				self.model=data["model"]
+					raise FileNotFoundError("Data Directory Doesn't Exist")			
 				
 	def load(self):
 		"""
@@ -95,7 +94,7 @@ class DataLoader:
 		if len(depth_paths)!=len(image_paths):
 			raise Exception("Data Error: depth and image count are not the same")
 		for i in range(len(depth_paths)):
-			self.data.append(self.Data(self.data_path+"/depth/"+depth_paths[i],self.data_path+"/images/"+image_paths[i],i))	
+			self.data.append(self.Data(self,self.data_path+"/depth/"+depth_paths[i],self.data_path+"/images/"+image_paths[i],i))	
 			self.length+=1
 		
 	def __iter__(self):
