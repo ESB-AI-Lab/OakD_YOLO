@@ -193,7 +193,7 @@ class DistanceFinder:
 				object_class = box.cls.item()
 				object_class = self.model.names[object_class]
 				spatials, center = self.spatialCalculator.calc_spatials(inDepth,[x1,y1,x2,y2],averaging_method=np.median)
-				data.append({"box":(x1,x1,y1,y2),"class":object_class,"depth":int(spatials['z'])})
+				data.append({"box":(x1,y1,x2,y2),"class":object_class,"depth":int(spatials['z'])})
 				color=(0,0,255)
 				fontType = cv2.FONT_HERSHEY_TRIPLEX
 				cv2.putText(rgbFrame,object_class,(x1+10,y1+20),cv2.FONT_HERSHEY_TRIPLEX, 0.5 , color)

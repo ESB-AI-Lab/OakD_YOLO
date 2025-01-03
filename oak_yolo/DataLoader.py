@@ -2,7 +2,7 @@ import numpy as np
 import os
 import cv2
 import yaml
-from oak_yolo.calc import HostSpatialsCalc 
+import json
 
 class DataLoader:
 	"""
@@ -37,16 +37,29 @@ class DataLoader:
 			"""
 			Get coordinates of objects
 			"""
-			return None
+			with open(self.spatials,'r') as file:
+				data = json.load(file)
+			return data
 			
-		def visualize(self):
+		def visualize(self,draw_boxes:bool=False):
 			"""
 			Visualize data
 			"""
 			depthFrame = self.getDepth()
 			imageFrame = self.getImage()
+			spatials = self.getSpatials()
+			if draw_boxes:
+				for data in spatials:
+					x1, y1, x2, y2 = data['box']
+					object_class = data['class']
+					depth = data['depth']
+					color=(0,0,255)
+					fontType = cv2.FONT_HERSHEY_TRIPLEX
+					cv2.putText(imageFrame,object_class,(x1+10,y1+20),cv2.FONT_HERSHEY_TRIPLEX, 0.5 , color)
+					cv2.rectangle(imageFrame, (x1, y1), (x2, y2),color, 1)
+					cv2.putText(imageFrame, f"DEPTH: {depth} mm", (x1 + 10, y1 + 35), fontType, 0.5, color)
 			depthFrameColorized = cv2.applyColorMap(cv2.convertScaleAbs(depthFrame, alpha=0.03), cv2.COLORMAP_JET)
-			combinedFrames = np.concatenate([depthFrameColorized,imageFrame],axis=0)
+			combinedFrames = np.concatenate([imageFrame,depthFrameColorized],axis=0)
 			while True:
 				cv2.imshow(str(self.index),combinedFrames)
 				if cv2.waitKey(1) == 32:
@@ -66,9 +79,6 @@ class DataLoader:
 		# settings
 		self.settings_path = settings
 		self.data_path = None
-		self.model = "yolo11n.pt"
-		self.device = "cpu"
-		#self.spatialCalculator = HostSpatialsCalc(self.camera)
 		self.__setup()
 		
 	def __setup(self):
@@ -88,13 +98,15 @@ class DataLoader:
 		"""
 		depth_count=0
 		depth_paths = os.listdir(self.data_path+"/depth")
-		depth_paths.sort(key=lambda x:int(x.split(".")[0][-1]))
+		depth_paths.sort(key=lambda x:int(x.split(".")[0].split("_")[-1]))
 		image_paths = os.listdir(self.data_path+"/images")
-		image_paths.sort(key=lambda x:int(x.split(".")[0][-1]))
-		if len(depth_paths)!=len(image_paths):
-			raise Exception("Data Error: depth and image count are not the same")
+		image_paths.sort(key=lambda x:int(x.split(".")[0].split("_")[-1]))
+		spatial_paths = os.listdir(self.data_path+"/spatials")
+		spatial_paths.sort(key=lambda x:int(x.split(".")[0].split("_")[-1]))
+		if len(depth_paths)!=len(image_paths) or len(image_paths)!=len(spatial_paths):
+			raise Exception("Data Error: data counts are not the same")
 		for i in range(len(depth_paths)):
-			self.data.append(self.Data(self,self.data_path+"/depth/"+depth_paths[i],self.data_path+"/images/"+image_paths[i],i))	
+			self.data.append(self.Data(self.data_path+"/depth/"+depth_paths[i],self.data_path+"/images/"+image_paths[i],self.data_path+"/spatials/"+spatial_paths[i],i))	
 			self.length+=1
 		
 	def __iter__(self):

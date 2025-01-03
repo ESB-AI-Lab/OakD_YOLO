@@ -4,7 +4,6 @@ data = DataLoader(settings="settings.yaml")
 data.load()
 
 for d in data:
-	print(d.visualize())
+	d.visualize(draw_boxes=True)
 	
 print(len(data))
-print(data[1])
