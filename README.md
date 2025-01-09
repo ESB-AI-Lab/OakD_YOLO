@@ -39,31 +39,6 @@ while(True):
   data = finder.get_frame()
 ```
 ***
-### Data Collector
-Collect depth frames and images to gather sample data
-#### Settings
-Below are the settings options to be put in `yaml` file
-```
-data:
-  output: # output directory path (str)
-  interval: # interval to save frame (int)
-  preview: # video preview (bool)
-camera:
-  fps: # frames per second (int)
-  stereoRes: # stereo camera respolution (400,720,800,1200)
-  previewRes: # resolution of rgb camera (widthxheight)
-  floodLightIntensity: # flood light intensity (0 to 1)
-  laserDotProjectorIntensity: # laser dot projector intensity (0 to 1)
-```
-#### Usage
-Initialize `DataCollector` object and call `start` function to collect data. Make sure there is a symbolic link using `ln -s` to `oak_yolo`.
-```
-from oak_yolo.DataCollector import DataCollector
-
-colector = DataCollect(path_to_settings.yaml)
-collector.start()
-```
-***
 ### Data Loader
 Load and interact with data from Data Collector
 #### Settings
