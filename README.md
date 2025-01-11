@@ -82,10 +82,14 @@ Obtain image data using `cv2.imread` from `Data` object using `getImage` functio
 ```
 image = data[0].getImage()
 ```
-Visualize depth and image frames from `Data` object using `visualize` function
+Obtain coordinates of detected objects from `Data` object using `getSpatials` function
+```
+image = data[0].getSpatials()
+```
+Visualize depth and image frames from `Data` object using `visualize` function and pass in `draw_boxes=True` to include bouding boxes in visualization
 ```
 for item in Data:
-  item.visualize()
+  item.visualize(draw_boxes=True)
 ```
 ## Samples
 Start Docker container with run script and use `-v` argument to mount `OakD_YOLO` directory.
