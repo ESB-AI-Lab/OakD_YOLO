@@ -21,6 +21,8 @@ data:
   model: # path to model (str)
   device: # device to perform inference on ("cpu","cuda")
   preview: # video preview (bool)
+  outputPath: # path to output data (str)
+  outputInterval: # interval of frame to save data(int)
 camera:
   fps: # frames per second (int)
   stereoRes: # stereo camera respolution (400,720,800,1200)
