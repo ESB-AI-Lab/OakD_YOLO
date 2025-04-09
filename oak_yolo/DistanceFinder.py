@@ -112,16 +112,22 @@ class DistanceFinder:
 		data["rgb"] = rgbFrame
 		depthFrameColorized = cv2.applyColorMap(cv2.convertScaleAbs(depthFrame, alpha=0.03), cv2.COLORMAP_JET)
 		# Save RGB/Depth
-		if(self.outputPath and self.frameCount%self.outputInterval==0):
+		if(self.outputPath and self.frameCount%self.outputInterval==0 and depthFrame and rgbFrame):
 			cv2.imwrite(f'{self.outputPath}/images/RGB_{self.frameCount//self.outputInterval}.jpg',rgbFrame)
 			np.save(f'{self.outputPath}/depth/DEPTH_{self.frameCount//self.outputInterval}',depthFrame)
 		# Get Model Predictions
-		predictions = self.model(rgbFrame, device=torch.device(self.device), verbose=False)
-		if len(predictions[0].boxes)==0:
+		if rgbFrame is not None:
+			predictions = self.model(rgbFrame, device=torch.device(self.device), verbose=False)
+		else:
+			predictions = []
+		if len(predictions)==0:
 			# Display Preview
 			if self.preview:
-				combined = np.concatenate([depthFrameColorized,rgbFrame],axis=0)
-				cv2.imshow("Combined",combined)
+				if depthFrame is not None:
+					cv2.imshow("Depth",depthFrame)
+					cv2.imshow("Depth Colorized",depthFrameColorized)
+				if rgbFrame is not None:
+					cv2.imshow("RGB",rgbFrame)
 				cv2.waitKey(1)
 			# Save Spatials
 			if(self.outputPath and self.frameCount%self.outputInterval==0):
@@ -138,6 +144,8 @@ class DistanceFinder:
 				object_class = box.cls.item()
 				object_class = self.model.names[object_class]
 				spatials, center = self.spatialCalculator.calc_spatials(depthFrame,[x1,y1,x2,y2],averaging_method=np.median)
+				if np.isnan(spatials['x']) or np.isnan(spatials['y']) or np.isnan(spatials['z']):
+					continue
 				objects.append({"box":(x1,y1,x2,y2),"class":object_class,"depth":int(spatials['z'])})
 				color=(0,0,255)
 				fontType = cv2.FONT_HERSHEY_TRIPLEX
@@ -149,8 +157,11 @@ class DistanceFinder:
 		data["objects"] = objects
 		# Display Preview
 		if self.preview:
-			combined = np.concatenate([depthFrameColorized,rgbFrame],axis=0)
-			cv2.imshow("Combined",combined)
+			if depthFrame is not None:
+				cv2.imshow("Depth",depthFrame)
+				cv2.imshow("Depth Colorized",depthFrameColorized)
+			if rgbFrame is not None:
+				cv2.imshow("RGB",rgbFrame)
 			cv2.waitKey(1)
 		# Save Spatials
 		if(self.outputPath and self.frameCount%self.outputInterval==0):
@@ -159,5 +170,3 @@ class DistanceFinder:
 		self.frameCount+=1
 		return data
 		#cv2.destroyAllWindows()
-
-
