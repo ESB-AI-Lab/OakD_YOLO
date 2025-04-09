@@ -9,6 +9,9 @@ import yaml
 import json
 import os
 from oak_yolo.calc import HostSpatialsCalc 
+from oak_yolo.CameraInterface import CameraInterface
+from oak_yolo.OakD_Cam import OakD_Cam
+from oak_yolo.OakD_Gazebo import OakD_Gazebo
 
 class DistanceFinder:
 	"""
@@ -35,34 +38,7 @@ class DistanceFinder:
 		self.camera_settings:dict = {"fps":60,"stereoRes":400,"previewRes":(1280,720),
 										"floodLightIntensity":1,"laserDotProjectorIntensity":1}
 		# Camera
-		self.camera = None
-		# Pipelines For Camera
-		self.pipeline = dai.Pipeline()
-		self.rgb = self.pipeline.create(dai.node.Camera)
-		self.rgb.setBoardSocket(dai.CameraBoardSocket.CAM_A)
-		self.left = self.pipeline.create(dai.node.MonoCamera)
-		self.left.setBoardSocket(dai.CameraBoardSocket.LEFT)
-		self.right = self.pipeline.create(dai.node.MonoCamera)
-		self.right.setBoardSocket(dai.CameraBoardSocket.RIGHT)
-		self.stereo = self.pipeline.create(dai.node.StereoDepth)
-		self.sync = self.pipeline.create(dai.node.Sync)
-		self.sync.setSyncThreshold(timedelta(milliseconds=50))
-		# Spatial Calculator
-		self.spatialCalculator = None
-		# Stereo Depth Config
-		self.stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_DENSITY)
-		self.stereo.setLeftRightCheck(True)
-		self.stereo.setSubpixel(True)
-		self.stereo.setDepthAlign(dai.CameraBoardSocket.CAM_A)
-		# Output Pipelines
-		self.sync_out = self.pipeline.create(dai.node.XLinkOut)
-		self.sync_out.setStreamName("sync")
-		# Linking
-		self.rgb.preview.link(self.sync.inputs["rgbSync"])
-		self.stereo.depth.link(self.sync.inputs["depthSync"])
-		self.left.out.link(self.stereo.left)
-		self.right.out.link(self.stereo.right)
-		self.sync.out.link(self.sync_out.input)
+		self.camera:CameraInterface = None
 		# Call Setup Function
 		self.__setup()
 		self.__camera_setup()
@@ -89,59 +65,32 @@ class DistanceFinder:
 						self.outputInterval=int(data_params["outputInterval"])
 			if 'camera' in data:
 				camera_params = data['camera']
-				for item in camera_params:
-					if item=="fps":
-						self.camera_settings["fps"]=int(camera_params["fps"])
-					if item=="stereoRes":
-						self.camera_settings["stereoRes"]=int(camera_params["stereoRes"])
-					if item=="previewRes":
-						x,y = camera_params["previewRes"].split("x")
-						self.camera_settings["previewRes"]=(int(x),int(y))
-					if item=="floodLightIntensity":
-						self.camera_settings["floodLightIntensity"]=int(camera_params["floodLightIntensity"])
-					if item=="laserDotProjectorIntensity":
-						self.camera_settings["laserDotProjectorintensity"]=int(camera_params["laserDotProjectorIntensity"])
+				if camera_params["sim"]:
+					self.camera = OakD_Gazebo(width=640,height=480,HFOV=1.274)
+				else:
+					for item in camera_params:
+						if item=="fps":
+							self.camera_settings["fps"]=int(camera_params["fps"])
+						if item=="stereoRes":
+							self.camera_settings["stereoRes"]=int(camera_params["stereoRes"])
+						if item=="previewRes":
+							x,y = camera_params["previewRes"].split("x")
+							self.camera_settings["previewRes"]=(int(x),int(y))
+						if item=="floodLightIntensity":
+							self.camera_settings["floodLightIntensity"]=int(camera_params["floodLightIntensity"])
+						if item=="laserDotProjectorIntensity":
+							self.camera_settings["laserDotProjectorintensity"]=int(camera_params["laserDotProjectorIntensity"])
+					self.camera = OakD_Cam(camera_settings=self.camera_settings)
 			if not self.model:
 				self.model = YOLO("yolo11n.pt",task="detect")
-			
-	def __camera_setup(self):
-		"""
-		Helper function for camera settings
-		"""
-		for key in self.camera_settings:
-			if key=="fps":
-				self.rgb.setFps(self.camera_settings["fps"])
-				self.left.setFps(self.camera_settings["fps"])
-				self.right.setFps(self.camera_settings["fps"])
-			if key=="stereoRes":
-				stereo_res = None
-				stereo_res_input=self.camera_settings["stereoRes"]
-				if stereo_res_input==720:
-					stereo_res = dai.MonoCameraProperties.SensorResolution.THE_720_P
-				elif stereo_res_input==800:
-					stereo_res = dai.MonoCameraProperties.SensorResolution.THE_800_P
-				elif stereo_res_input==400:
-					stereo_res = dai.MonoCameraProperties.SensorResolution.THE_400_P
-				elif stereo_res_input==1200:
-					stereo_res = dai.MonoCameraProperties.SensorResolution.THE_1200_P
-				else:
-					raise ValueError("Improper Stereo Respolution")
-				self.left.setResolution(stereo_res)
-				self.right.setResolution(stereo_res)
-			if key=="previewRes":
-				self.rgb.setPreviewSize(self.camera_settings["previewRes"][0],self.camera_settings["previewRes"][1])
 
 	def start(self):
 		"""
 		Function to start distance finder
 		"""
-		# Connect To Device And Start Pipeline
-		self.camera = dai.Device(self.pipeline,maxUsbSpeed=dai.UsbSpeed.SUPER)
-		# Add Device Settings
-		self.camera.setIrFloodLightIntensity(self.camera_settings["floodLightIntensity"])
-		self.camera.setIrLaserDotProjectorIntensity(self.camera_settings["laserDotProjectorIntensity"])
-		self.synced = self.camera.getOutputQueue(name="sync",maxSize=1,blocking=False)
+		# Initialize Spatial Calculator and start Camera	
 		self.spatialCalculator = HostSpatialsCalc(self.camera)
+		self.camera.start()
 		# Create Directories For Output
 		if not os.path.exists(self.outputPath):
 			os.mkdir(self.outputPath)
@@ -152,20 +101,15 @@ class DistanceFinder:
 		if not os.path.exists(self.outputPath+"/spatials"):
 			os.mkdir(self.outputPath+"/spatials")
 		
-	def get_frame(self):
+	def process_frame(self):
 		# Array To Store Object Data
-		data = []
-		# Get Frames From The Camera
-		syncData = self.synced.get()
-		inDepth = None
-		inRGB = None
-		for name,msg in syncData:
-			if name == "depthSync":
-				inDepth = msg
-			if name == "rgbSync":
-				inRGB = msg
-		depthFrame = inDepth.getFrame()
-		rgbFrame = inRGB.getCvFrame()
+		data:dict = {}
+		# Gete frames from camera
+		frame = self.camera.get_frame()
+		depthFrame = frame["depth"]
+		rgbFrame = frame["rgb"]
+		data["depth"] = depthFrame
+		data["rgb"] = rgbFrame
 		depthFrameColorized = cv2.applyColorMap(cv2.convertScaleAbs(depthFrame, alpha=0.03), cv2.COLORMAP_JET)
 		# Save RGB/Depth
 		if(self.outputPath and self.frameCount%self.outputInterval==0):
@@ -186,14 +130,15 @@ class DistanceFinder:
 			self.frameCount+=1
 			return data
 		# Iterate Through YOLO Detections And Get Object Depths
+		objects = []
 		for detection in predictions:
 			for box in detection.boxes:
 				x1, y1, x2, y2 = box.xyxy[0]
 				x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
 				object_class = box.cls.item()
 				object_class = self.model.names[object_class]
-				spatials, center = self.spatialCalculator.calc_spatials(inDepth,[x1,y1,x2,y2],averaging_method=np.median)
-				data.append({"box":(x1,y1,x2,y2),"class":object_class,"depth":int(spatials['z'])})
+				spatials, center = self.spatialCalculator.calc_spatials(depthFrame,[x1,y1,x2,y2],averaging_method=np.median)
+				objects.append({"box":(x1,y1,x2,y2),"class":object_class,"depth":int(spatials['z'])})
 				color=(0,0,255)
 				fontType = cv2.FONT_HERSHEY_TRIPLEX
 				cv2.putText(rgbFrame,object_class,(x1+10,y1+20),cv2.FONT_HERSHEY_TRIPLEX, 0.5 , color)
@@ -201,6 +146,7 @@ class DistanceFinder:
 				cv2.putText(rgbFrame, f"X: {int(spatials['x'])} mm", (x1 + 10, y1 + 35), fontType, 0.5, color)
 				cv2.putText(rgbFrame, f"Y: {int(spatials['y'])} mm", (x1 + 10, y1 + 50), fontType, 0.5, color)
 				cv2.putText(rgbFrame, f"Z: {int(spatials['z'])} mm", (x1 + 10, y1 + 65), fontType, 0.5, color)
+		data["objects"] = objects
 		# Display Preview
 		if self.preview:
 			combined = np.concatenate([depthFrameColorized,rgbFrame],axis=0)

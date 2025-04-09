@@ -1,15 +1,17 @@
 """
-This code is from depthai-experiments
+This code is from depthai-experiments and modified to take in CameraInterface instead of dai.device
 Link: https://github.com/luxonis/depthai-experiments/blob/master/gen2-calc-spatials-on-host/calc.py
 """
 import math
 import numpy as np
 import depthai as dai
+from oak_yolo.CameraInterface import CameraInterface
 
 class HostSpatialsCalc:
     # We need device object to get calibration data
-    def __init__(self, device):
-        self.calibData = device.readCalibration()
+    def __init__(self, camera: CameraInterface):
+        #self.calibData = device.readCalibration()
+        self.camera = camera
 
         # Values
         self.DELTA = 5
@@ -36,9 +38,9 @@ class HostSpatialsCalc:
         return math.atan(math.tan(HFOV / 2.0) * offset / (frame.shape[1] / 2.0))
 
     # roi has to be list of ints
-    def calc_spatials(self, depthData, roi, averaging_method=np.mean):
+    def calc_spatials(self, depthFrame, roi, averaging_method=np.mean):
 
-        depthFrame = depthData.getFrame()
+        #depthFrame = depthData.getFrame()
 
         roi = self._check_input(roi, depthFrame) # If point was passed, convert it to ROI
         xmin, ymin, xmax, ymax = roi
@@ -48,8 +50,8 @@ class HostSpatialsCalc:
         inRange = (self.THRESH_LOW <= depthROI) & (depthROI <= self.THRESH_HIGH)
 
         # Required information for calculating spatial coordinates on the host
-        HFOV = np.deg2rad(self.calibData.getFov(dai.CameraBoardSocket(depthData.getInstanceNum()), useSpec=False))
-
+        #HFOV = np.deg2rad(self.calibData.getFov(dai.CameraBoardSocket(depthData.getInstanceNum()), useSpec=False))
+        HFOV = self.camera.get_HFOV()
 
         averageDepth = averaging_method(depthROI[inRange])
 
