@@ -91,14 +91,15 @@ class DistanceFinder:
 		self.spatialCalculator = HostSpatialsCalc(self.camera)
 		self.camera.start()
 		# Create Directories For Output
-		if not os.path.exists(self.outputPath):
-			os.mkdir(self.outputPath)
-		if not os.path.exists(self.outputPath+"/depth"):
-			os.mkdir(self.outputPath+"/depth")
-		if not os.path.exists(self.outputPath+"/images"):
-			os.mkdir(self.outputPath+"/images")
-		if not os.path.exists(self.outputPath+"/spatials"):
-			os.mkdir(self.outputPath+"/spatials")
+		if self.outputPath:
+			if not os.path.exists(self.outputPath):
+				os.mkdir(self.outputPath)
+			if not os.path.exists(self.outputPath+"/depth"):
+				os.mkdir(self.outputPath+"/depth")
+			if not os.path.exists(self.outputPath+"/images"):
+				os.mkdir(self.outputPath+"/images")
+			if not os.path.exists(self.outputPath+"/spatials"):
+				os.mkdir(self.outputPath+"/spatials")
 		
 	def process_frame(self):
 		# Array To Store Object Data
