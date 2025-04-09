@@ -9,7 +9,7 @@ class CameraInterface(ABC):
         pass
 
     @abstractmethod
-    def get_HFOV(self) -> np.rad:
+    def get_HFOV(self) -> float:
         pass
 
     @abstractmethod
