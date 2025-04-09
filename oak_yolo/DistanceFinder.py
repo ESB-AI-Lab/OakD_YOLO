@@ -41,7 +41,6 @@ class DistanceFinder:
 		self.camera:CameraInterface = None
 		# Call Setup Function
 		self.__setup()
-		self.__camera_setup()
 		
 	def __setup(self):
 		"""
